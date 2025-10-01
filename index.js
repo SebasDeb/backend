@@ -35,7 +35,7 @@ app.post("/api/login", async (req, res) => {
 
     res.json({ success: true, message: "Login exitoso", user: username });
     console.log("User logged in:", username);
-    
+
   } catch (err) {
     console.error("Error login:", err);
     res.status(500).json({ success: false, error: err.message });
@@ -120,7 +120,6 @@ app.get("/api/horario/:user", async (req, res) => {
   }
 });
 
-app.listen(3000, "0.0.0.0", () => {
-  console.log("✅ API corriendo en http://0.0.0.0:3000");
+app.listen(3000, () => {
+  console.log(`Servidor corriendo en el puerto 3000`);
 });
-
