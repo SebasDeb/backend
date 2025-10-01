@@ -1,12 +1,20 @@
 import express from "express";
 import puppeteer from "puppeteer";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 // Guardamos sesiones en memoria
 // sessions = { "179763": { cookies: [...], username: "179763", password: "xxx" } }
 let sessions = {};
+
+// Ruta de prueba
+app.get('/', (req, res) => {
+  res.send('API funcionando desde Render ');
+});
+
 
 /**
  * LOGIN a intranet.udlap.mx
