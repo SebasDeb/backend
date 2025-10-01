@@ -20,9 +20,14 @@ app.get('/', (req, res) => {
  * LOGIN a intranet.udlap.mx
  */
 app.post("/api/login", async (req, res) => {
+  console.log("Login request body:", req.body);
+
   const { username, password } = req.body;
 
-  const browser = await puppeteer.launch({ headless: true });
+  const browser = await puppeteer.launch({ 
+     headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+   });
   const page = await browser.newPage();
 
   try {
@@ -37,6 +42,9 @@ app.post("/api/login", async (req, res) => {
       page.click("#btnAceptar"),
       page.waitForNavigation({ waitUntil: "networkidle2" }),
     ]);
+
+    console.log("Navegación completada, URL actual:", page.url());
+
 
     const cookies = await page.cookies();
     sessions[username] = { cookies, username, password };
