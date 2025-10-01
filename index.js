@@ -32,6 +32,7 @@ app.post("/api/login", async (req, res) => {
     "--disable-dev-shm-usage",
     "--disable-gpu",
     "--no-zygote",
+    "--no-sandbox",
     ],
     
    });
