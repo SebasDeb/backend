@@ -26,13 +26,20 @@ app.post("/api/login", async (req, res) => {
 
   const browser = await puppeteer.launch({ 
      headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: [
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-zygote",
+    ],
+    
    });
   const page = await browser.newPage();
 
   try {
     await page.goto("https://online.udlap.mx/intranet/Login/Index", {
       waitUntil: "networkidle2",
+      timeout: 60000,
     });
 
     await page.type("#username", username, { delay: 50 });
@@ -40,7 +47,7 @@ app.post("/api/login", async (req, res) => {
 
     await Promise.all([
       page.click("#btnAceptar"),
-      page.waitForNavigation({ waitUntil: "networkidle2" }),
+      page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }),
     ]);
 
     console.log("Navegación completada, URL actual:", page.url());
