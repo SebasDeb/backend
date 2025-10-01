@@ -136,20 +136,7 @@ app.get("/api/horario/:user", async (req, res) => {
     });
     console.log("✅ URL actual:", page.url());
 
-    // 3) Intentar el horario en *online* (evita salto de subdominio)
-    //    Si NO existe en online, comenta este paso y usa el paso 4.
-    const horarioUrlOnline = "https://online.udlap.mx/ConsultaHorarioAlumno/default.aspx";
-    console.log("📄 Intentando horario en ONLINE:", horarioUrlOnline);
-    try {
-      await page.setExtraHTTPHeaders({
-        Referer: "https://online.udlap.mx/intranet/Home/Estudiantes",
-      });
-      await page.goto(horarioUrlOnline, {
-        waitUntil: "domcontentloaded", // menos exigente si hay recursos lentos
-        timeout: 60000,
-      });
-      console.log("✅ URL horario (online):", page.url());
-    } catch (e) {
+    
       console.log("⚠️ Falló horario en ONLINE, probando INTRANET:", e.message);
 
       // 4) Si no carga en online, probamos intranet con referer
@@ -162,7 +149,7 @@ app.get("/api/horario/:user", async (req, res) => {
         timeout: 60000,
       });
       console.log("✅ URL horario (intranet):", page.url());
-    }
+    
 
     // 5) Extraer materias + días + hora (ajusta selectores si cambian)
     const horario = await page.evaluate(() => {
