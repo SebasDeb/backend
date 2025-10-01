@@ -13,6 +13,7 @@ let sessions = {};
 // Ruta de prueba
 app.get('/', (req, res) => {
   res.send('API funcionando desde Render ');
+  console.log('API funcionando desde Render');
 });
 
 
