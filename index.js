@@ -36,17 +36,23 @@ app.post("/api/login", async (req, res) => {
     ],
     
    });
+
+   console.log("Browser launched");
   const page = await browser.newPage();
 
+  console.log("Trying to log in user:", username);
   try {
     await page.goto("https://online.udlap.mx/intranet/Login/Index", {
       waitUntil: "networkidle2",
       timeout: 60000,
     });
 
+    console.log("Page loaded, filling form");
     await page.type("#username", username, { delay: 50 });
     await page.type("#password", password, { delay: 50 });
 
+
+    console.log("Submitting form");
     await Promise.all([
       page.click("#btnAceptar"),
       page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }),
@@ -77,73 +83,116 @@ app.get("/api/horario/:user", async (req, res) => {
   const session = sessions[user];
 
   if (!session) {
-    return res
-      .status(401)
-      .json({ success: false, error: "Usuario no logueado, haz login primero" });
+    return res.status(401).json({
+      success: false,
+      error: "Usuario no logueado, haz login primero",
+    });
   }
 
-  const browser = await puppeteer.launch({ headless: true });
-  const page = await browser.newPage();
-
+  let browser;
   try {
-    // Reusar cookies
-    await page.setCookie(...session.cookies);
-
-    // Autenticación HTTP básica
-    await page.authenticate({
-      username: session.username,
-      password: session.password,
+    console.log("🧭 Abriendo navegador para horario...");
+    browser = await puppeteer.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--no-zygote",
+      ],
     });
 
-    await page.goto(
-      "https://intranet.udlap.mx/ConsultaHorarioAlumno/default.aspx",
-      { waitUntil: "networkidle2" }
-    );
+    const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000);
 
-    // Extraer materias y horarios
+    // Log de peticiones fallidas (útil para ver bloqueos/CORS/SSL)
+    page.on("requestfailed", (req) => {
+      console.log("❌ Request failed:", req.url(), req.failure()?.errorText);
+    });
+
+    // 1) Reusar cookies pero ajustando dominio para subdominios
+    //    (las ponemos en .udlap.mx para que apliquen en online.* e intranet.*)
+    const normalizedCookies = session.cookies.map((c) => {
+      const nc = { ...c };
+      // sólo si venían ‘hostOnly’ para online.udlap.mx
+      // forzamos dominio base:
+      nc.domain = ".udlap.mx";
+      // Puppeteer no acepta hostOnly en setCookie:
+      delete nc.hostOnly;
+      // Aseguramos secure para https
+      nc.secure = true;
+      return nc;
+    });
+
+    console.log("🍪 Seteando cookies normalizadas:", normalizedCookies.length);
+    await page.setCookie(...normalizedCookies);
+
+    // 2) Ir primero a la HOME donde ya quedaste logueado (mismo subdominio del login)
+    console.log("🌍 Abriendo Home/Estudiantes en online...");
+    await page.goto("https://online.udlap.mx/intranet/Home/Estudiantes", {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+    });
+    console.log("✅ URL actual:", page.url());
+
+    // 3) Intentar el horario en *online* (evita salto de subdominio)
+    //    Si NO existe en online, comenta este paso y usa el paso 4.
+    const horarioUrlOnline = "https://online.udlap.mx/ConsultaHorarioAlumno/default.aspx";
+    console.log("📄 Intentando horario en ONLINE:", horarioUrlOnline);
+    try {
+      await page.setExtraHTTPHeaders({
+        Referer: "https://online.udlap.mx/intranet/Home/Estudiantes",
+      });
+      await page.goto(horarioUrlOnline, {
+        waitUntil: "domcontentloaded", // menos exigente si hay recursos lentos
+        timeout: 60000,
+      });
+      console.log("✅ URL horario (online):", page.url());
+    } catch (e) {
+      console.log("⚠️ Falló horario en ONLINE, probando INTRANET:", e.message);
+
+    }
+
+    // 5) Extraer materias + días + hora (ajusta selectores si cambian)
     const horario = await page.evaluate(() => {
       const materias = [];
       const rows = document.querySelectorAll("table tr");
-
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
-
-        // Filas con la materia
         if (row.classList.contains("orange")) {
           const materiaText = row.innerText.trim();
-
-          // El siguiente tr tiene el detalle (horario, idioma, etc.)
           const detalleRow = rows[i + 1];
           const detalleText = detalleRow ? detalleRow.innerText : "";
 
-          // Buscar "Horario: ..."
+          // "Horario: L M X J V 08:00-09:00" (ajusta regex si el formato difiere)
           const regex = /Horario:\s*([^\d]+)\s+(\d{1,2}:\d{2}-\d{1,2}:\d{2})/;
           const match = detalleText.match(regex);
-
           if (match) {
-            const dias = match[1].trim();
-            const hora = match[2].trim();
-
             materias.push({
               materia: materiaText,
-              dias,
-              hora,
+              dias: match[1].trim(),
+              hora: match[2].trim(),
             });
           }
         }
       }
-
       return materias;
     });
 
+    console.log("📚 Materias encontradas:", horario.length);
     res.json({ success: true, horario });
   } catch (err) {
-    console.error("Error al obtener horario:", err);
+    console.error("❌ Error al obtener horario:", err);
     res.status(500).json({ success: false, error: err.message });
   } finally {
-    await browser.close();
+    if (browser) {
+      await browser.close();
+      console.log("🛑 Navegador cerrado (horario)");
+    }
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
